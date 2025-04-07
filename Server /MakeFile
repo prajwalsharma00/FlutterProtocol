@@ -1,0 +1,8 @@
+server: server.c libparser.a
+	gcc server.c -L. -lparser -o server -I.
+
+libparser.a: parser.o
+	ar rcs libparser.a parser.o
+
+parser.o: parser.c parser.h
+	gcc -c parser.c -o parser.o
