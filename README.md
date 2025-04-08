@@ -13,7 +13,7 @@ Each request sent to the server must follow this exact format:
 - **DATE** is 8 digits long: `yyyyMMdd`
 - **TASK** contains the task description
 - **STATE** is either `true` or `false` (representing done or not done)
-- **Each request ends with `END`**
+- **Each request ends with `|END`**
 
 ### ✅ Examples:
 
