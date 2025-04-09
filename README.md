@@ -24,3 +24,11 @@ DELETE|DATE20250407|TASKBuy milk!STATEfalse|END
 GET|DATE20250407|END
 GETALL|END
 ```
+
+
+```RUN
+
+make        # builds parser.o, server.o, then links 'server'
+make run    # builds (if needed) and immediately runs './server'
+make clean  # removes object files and the 'server' binary
+```
