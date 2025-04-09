@@ -1,8 +1,23 @@
-server: server.c libparser.a
-	gcc server.c -L. -lparser -o server -I.
+CC = gcc
+CFLAGS = -Wall -Wextra -O2
 
-libparser.a: parser.o
-	ar rcs libparser.a parser.o
+SRCS = parser.c server.c
+OBJS = $(SRCS:.c=.o)
+TARGET = server
 
-parser.o: parser.c parser.h
-	gcc -c parser.c -o parser.o
+.PHONY: all clean run
+
+all: $(TARGET)
+
+$(TARGET): $(OBJS)
+	$(CC) $(CFLAGS) -o $@ $^
+
+%.o: %.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+# Build and immediately run the server
+run: $(TARGET)
+	./$(TARGET)
+
+clean:
+	rm -f $(OBJS) $(TARGET)
