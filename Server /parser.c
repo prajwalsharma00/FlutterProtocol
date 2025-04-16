@@ -229,36 +229,120 @@ char *data_parser(char *string) // this is to check wherether the request is sen
     // printf("\n\n\n THE SERVER REQUEST WAS \n\n\n%s ", string);
     char datas[4018];
     sprintf(datas, "%s", string);
-    if (strstr(string, "GET /download HTTP/1.1"))
+   if (strstr(string, "GET /download HTTP/1.1"))
     {
-        FILE *log = fopen("server.log", "a");
-        if (!VALIDFILE(log))
+        // 1) Fetch your CSV
+        char *csv_data = getall();
+        if (!csv_data)
         {
-            fprintf(stdout, "couldnot open server log .. \n");
-
-            return "ERROR";
+            return strdup("HTTP/1.1 500 Internal Server Error\r\n\r\nFailed to load data.");
         }
-        fwrite("\n\n", 2, 1, log);
-        fwrite(string, strlen(string), sizeof(char), log);
-        fclose(log);
-        char *csv_data = getall(); // assume this returns a pointer to static/global buffer
-        int length = strlen(csv_data);
 
-        char *response = malloc(length + 512); // enough room for headers
-        if (!response)
+        // 2) HTML header + CSS
+        const char *html_start =
+            "<!DOCTYPE html>"
+            "<html lang=\"en\"><head><meta charset=\"UTF-8\"><title>TODOLIST</title>"
+            "<style>"
+            "  body { background:#f0f2f5; font-family:Arial, sans-serif; margin:0; padding:20px; }"
+            "  h1 { text-align:center; color:#333; }"
+            "  section { background:#fff; max-width:600px; margin:20px auto; "
+            "             border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.1); overflow:hidden; }"
+            "  section h2 { margin:0; padding:12px 20px; background:#4a90e2; color:#fff; }"
+            "  table { width:100%; border-collapse:collapse; }"
+            "  th, td { padding:12px 16px; }"
+            "  th { background:#f7f9fa; text-transform:uppercase; font-size:0.85em; }"
+            "  tr:nth-child(even) { background:#fbfcfd; }"
+            "</style>"
+            "</head><body>"
+            "<h1>TODOLIST</h1>";
+
+        const char *html_end = "</body></html>";
+
+        // 3) Allocate a buffer for building the HTML body
+        size_t buf_size = strlen(html_start) + strlen(csv_data) * 4 + strlen(html_end) + 1024;
+        char *body = malloc(buf_size);
+        if (!body)
         {
             return strdup("HTTP/1.1 500 Internal Server Error\r\n\r\nMemory allocation failed.");
         }
+        strcpy(body, html_start);
 
-        sprintf(response,
-                "HTTP/1.1 200 OK\r\n"
-                "Content-Type: text/html\r\n"
+        // 4) Parse CSV line-by-line
+        char *saveptr, *line = strtok_r(csv_data, "\n", &saveptr);
+        int in_table = 0;
+        while (line)
+        {
+            if (strncmp(line, "DATE,", 5) == 0)
+            {
+                // Close previous table/section if open
+                if (in_table)
+                {
+                    strcat(body, "  </table></section>");
+                }
+                // Start new section + table
+                char *date = line + 5;
+                strcat(body,
+                       "<section>"
+                       "<h2>Date: ");
+                strcat(body, date);
+                strcat(body, "</h2>"
+                             "<table>"
+                             "<tr><th>Task</th><th>DONE</th></tr>");
+                in_table = 1;
+            }
+            else
+            {
+                // This is a task line: "TaskName,true|false"
+                char *comma = strchr(line, ',');
+                if (comma)
+                {
+                    *comma = '\0';
+                    char *task = line;
+                    char *done = comma + 1;
+                    strcat(body, "<tr><td>");
+                    strcat(body, task);
+                    strcat(body, "</td><td>");
 
-                "Content-Length: %d\r\n"
-                "\r\n"
-                "<html><body><pre><h1>%s</h1></pre></body></html>",
-                length + 46, csv_data);
+                    // Check the done field and output "Completed" or "Incomplete"
+                    if (strcmp(done, "true") == 0)
+                        strcat(body, "Completed");
+                    else
+                        strcat(body, "Incomplete");
 
+                    strcat(body, "</td></tr>");
+                }
+            }
+            line = strtok_r(NULL, "\n", &saveptr);
+        }
+        // Close last table/section if open
+        if (in_table)
+        {
+            strcat(body, "  </table></section>");
+        }
+        // Append closing HTML
+        strcat(body, html_end);
+
+        // 5) Wrap with HTTP headers (not visible in the page)
+        int content_length = strlen(body);
+        char header_buf[256];
+        int header_len = snprintf(header_buf, sizeof(header_buf),
+                                  "HTTP/1.1 200 OK\r\n"
+                                  "Content-Type: text/html; charset=UTF-8\r\n"
+                                  "Content-Length: %d\r\n"
+                                  "\r\n",
+                                  content_length);
+
+        // 6) Allocate final response
+        char *response = malloc(header_len + content_length + 1);
+        if (!response)
+        {
+            free(body);
+            return strdup("HTTP/1.1 500 Internal Server Error\r\n\r\nMemory allocation failed.");
+        }
+        memcpy(response, header_buf, header_len);
+        memcpy(response + header_len, body, content_length + 1);
+
+        free(body);
         return response;
     }
 
